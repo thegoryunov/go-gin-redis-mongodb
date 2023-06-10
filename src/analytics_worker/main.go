@@ -33,40 +33,39 @@ type AnalyticsData struct {
 	Views int
 }
 
-func getDoc(mongoClient *mongo.Client, title string) (AnalytcisData, error) {
+func getDoc(mongoClient *mongo.Client, title string) (AnalyticsData, error) {
 	coll := mongoClient.Database(databaseName).Collection(collectionName)
-	var result AnalytcisData
+	var result AnalyticsData
 	err := coll.FindOne(context.TODO(), bson.D{{"title", title}}).Decode(&result)
 	if err != nil {
-		log.Error().Err(err).Msg("Error while getting doc from mongo")
+		log.Error().Err(err).Msg("error occured while fetching post from mongo")
 		return result, err
 	}
 	return result, err
 }
 
-func insertDoc(mongoClient *mongo.Client, title string) (*mongo.InertOneResult, error) {
+func insertDoc(mongoClient *mongo.Client, title string) (*mongo.InsertOneResult, error) {
 	coll := mongoClient.Database(databaseName).Collection(collectionName)
-	data := AnalytcisData{Title: title, Views: 1}
+	data := AnalyticsData{Title: title, Views: 1}
 	result, err := coll.InsertOne(context.TODO(), data)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Error while inserting doc to mongo")
+		log.Error().Err(err).Msg("error occured while inserting post to mongo")
 		return result, err
 	}
 	return result, err
 }
 
-func updateAnalytics(client *mongo.Client, title string) {
-
-	existingDoc, err := getDoc(MongoClient, title)
+func updateAnalytics(mongoClient *mongo.Client, title string) {
+	existingDoc, err := getDoc(mongoClient, title)
 	if err != nil {
-		log.Error().Err(err).Msg("Error while getting doc")
+		log.Error().Err(err).Msg("error occured while fetching post from mongo")
 	}
 	if existingDoc.Title == "" {
-		insertDoc(MongoClient, title)
+		insertDoc(mongoClient, title)
 	} else {
 		views := existingDoc.Views + 1
-		coll := MongoClient.Database("blog").Collection("views")
+		coll := mongoClient.Database("blog").Collection("views")
 		_, err := coll.UpdateOne(
 			context.TODO(),
 			bson.M{"title": existingDoc.Title},
@@ -75,34 +74,34 @@ func updateAnalytics(client *mongo.Client, title string) {
 			},
 		)
 		if err != nil {
-			log.Error().Err(err).Msg("Error while updating views")
+			log.Error().Err(err).Msg("error occured while updating analytics")
 		}
 	}
 }
 
 func main() {
 	ctx := context.Background()
-	MongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
+	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
 	if err != nil {
-		log.Error().Err(err).Msg("Error while creating mongo client")
+		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
-	err = MongoClient.Connect(ctx)
+	err = mongoClient.Connect(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Error while connecting to mongo")
+		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
-	defer MongoClient.Disconnect(ctx)
+	defer mongoClient.Disconnect(ctx)
 	opt, err := redis.ParseURL(redis_uri)
 	if err != nil {
-		log.Error().Err(err).Msg("Error while parsing redis url")
+		log.Error().Err(err).Msg("error occured while connecting to redis")
 	}
 	rdb := redis.NewClient(opt)
 	for {
 		result, err := rdb.BLPop(ctx, 0, "queue:blog-view").Result()
 		if err != nil {
-			log.Error().Err(err).Msg("Error while getting data from redis")
+			log.Error().Err(err).Msg("error occured while fetching data from posts redis")
 			continue
 		}
-		updateAnalytics(MongoClient, result[1])
+		updateAnalytics(mongoClient, result[1])
 		fmt.Println(result[resultKeyIndex], result[resultValueIndex])
 	}
 }

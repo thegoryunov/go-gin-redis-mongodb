@@ -32,10 +32,10 @@ const (
 func getPost(ctx *gin.Context, mongoClient *mongo.Client, title string) (bson.D, error) {
 	coll := mongoClient.Database(databaseName).Collection(collectionName)
 	var result bson.D
-	err := coll.FindOne(ctx, bson.D{{"title": title}}).Decode(&result)
+	err := coll.FindOne(ctx, bson.D{{"title", title}}).Decode(&result)
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while fetching posts from posts mongo")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "get post failed"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Get post failed"})
 		return nil, err
 	}
 	Publish(ctx, title)
@@ -46,35 +46,36 @@ func Publish(ctx *gin.Context, payload string) {
 	opt, err := redis.ParseURL(redis_uri)
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to redis")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Analytics failed"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Analytics error"})
+		return
 	}
 	rdb := redis.NewClient(opt)
 	if err := rdb.RPush(ctx, "queue:blog-view", payload).Err(); err != nil {
-		log.Error().Err(err).Msg("error occured while pushing to redis")
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Analytics failed"})
+		log.Error().Err(err).Msg("error occured while publishing to redis")
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Analytics error"})
+		return
 	}
 }
 
 func main() {
 	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
 	if err != nil {
-		log.Error().Err(err).Msg("error occured while creating mongo client")
+		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	err = mongoClient.Connect(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("error occured while connecting mongo client")
+		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
-
 	defer mongoClient.Disconnect(ctx)
 	router := gin.Default()
 
-	router.GET("/posts:title", func(ctx *gin.Context) {
+	router.GET("/posts/:title", func(ctx *gin.Context) {
 		title := ctx.Param("title")
 		result, err := getPost(ctx, mongoClient, title)
 		if err != nil {
-			log.Error().Err(err).Msg("error occured while getting post")
+			log.Error().Err(err).Msg("error occured while fetching post from mongo")
 		}
 		ctx.JSON(http.StatusOK, gin.H{
 			"Data": result,
