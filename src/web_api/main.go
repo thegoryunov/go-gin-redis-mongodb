@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+// todo play game
 type BlogPost struct {
 	Title  string `json:"title"`
 	Author string `json:"author"`
