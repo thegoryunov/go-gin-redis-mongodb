@@ -1,7 +1,0 @@
-go 1.19
-
-use (
-	./src/analytics_worker
-	./src/blog_service
-	./src/web_api
-)
