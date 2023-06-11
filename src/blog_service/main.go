@@ -16,12 +16,13 @@ import (
 )
 
 var (
-	mongo_host = os.Getenv("MONGO1_HOST")
-	mongo_port = os.Getenv("MONGO1_PORT")
-	redis_host = os.Getenv("REDIS_HOST")
-	redis_port = os.Getenv("REDIS_PORT")
-	mongo_uri  = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
-	redis_uri  = fmt.Sprintf("redis://%s:%s/0", redis_host, redis_port)
+	mongo_host   = os.Getenv("MONGO1_HOST")
+	mongo_port   = os.Getenv("MONGO1_PORT")
+	redis_host   = os.Getenv("REDIS_HOST")
+	redis_port   = os.Getenv("REDIS_PORT")
+	mongo_uri    = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
+	redis_uri    = fmt.Sprintf("redis://%s:%s/0", redis_host, redis_port)
+	service_name = "blog_service v0.1"
 )
 
 const (
@@ -57,6 +58,10 @@ func Publish(ctx *gin.Context, payload string) {
 	}
 }
 
+func index(c *gin.Context) {
+	c.String(http.StatusOK, service_name)
+}
+
 func main() {
 	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
 	if err != nil {
@@ -71,6 +76,7 @@ func main() {
 	defer mongoClient.Disconnect(ctx)
 	router := gin.Default()
 
+	router.GET("/", index)
 	router.GET("/posts/:title", func(ctx *gin.Context) {
 		title := ctx.Param("title")
 		result, err := getPost(ctx, mongoClient, title)
