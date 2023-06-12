@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"gopkg.in/yaml.v2"
+	"os"
 )
 
 type BlogPost struct {
@@ -18,18 +18,39 @@ type BlogPost struct {
 	Body   string `json:"body"`
 }
 
+type Config struct {
+	Mongo struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"mongo"`
+	Redis struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"redis"`
+}
+
 const (
 	databaseName   = "blog"
 	collectionName = "posts"
 )
 
 var (
-	mongo_host = os.Getenv("MONGO1_HOST")
-	mongo_port = os.Getenv("MONGO1_PORT")
-	redis_host = os.Getenv("REDIS_HOST")
-	redis_port = os.Getenv("REDIS_PORT")
-	mongo_uri  = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
-	redis_uri  = fmt.Sprintf("redis://%s:%s/0", redis_host, redis_port)
+/*
+mongo_host = os.Getenv("MONGO1_HOST")
+mongo_port = os.Getenv("MONGO1_PORT")
+redis_host = os.Getenv("REDIS_HOST")
+redis_port = os.Getenv("REDIS_PORT")
+mongo_uri  = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
+redis_uri  = fmt.Sprintf("redis://%s:%s/0", redis_host, redis_port)
+*/
 )
 
 func insertDoc(mongoClient *mongo.Client, post BlogPost) (*mongo.InsertOneResult, error) {
@@ -44,7 +65,24 @@ func insertDoc(mongoClient *mongo.Client, post BlogPost) (*mongo.InsertOneResult
 }
 
 func main() {
-	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
+
+	// open config file
+	file, err := os.Open("../../config.yml")
+	if err != nil {
+		fmt.Println("error opening file:", err)
+	}
+	defer file.Close()
+
+	// read config file
+	var config Config
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	// connect to mongo
+	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(config.Mongo.Uri))
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
@@ -54,11 +92,15 @@ func main() {
 		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
 	defer mongoClient.Disconnect(ctx)
-	opt, err := redis.ParseURL(redis_uri)
+
+	// connect to redis
+	opt, err := redis.ParseURL(config.Redis.Uri)
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to redis")
 	}
 	rdb := redis.NewClient(opt)
+
+	// worker execution
 	for {
 		result, err := rdb.BLPop(ctx, 0, "queue:new-post").Result()
 		if err != nil {
