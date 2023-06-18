@@ -6,6 +6,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/rs/zerolog v1.29.1
 	go.mongodb.org/mongo-driver v1.11.7
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require github.com/mattn/go-isatty v0.0.14 // indirect

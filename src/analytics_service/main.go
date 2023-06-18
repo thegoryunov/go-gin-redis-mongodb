@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"os"
 	"time"
@@ -14,15 +15,28 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type Config struct {
+	Mongo struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"mongo"`
+	Redis struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"redis"`
+}
+
 const (
 	databaseName   = "blog"
 	collectionName = "views"
-)
-
-var (
-	mongo_host = os.Getenv("MONGO2_HOST")
-	mongo_port = os.Getenv("MONGO2_PORT")
-	mongo_uri  = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
 )
 
 func getAnalyticsDataByTitle(ctx *gin.Context, mongoClient *mongo.Client, title string) (bson.D, error) {
@@ -30,7 +44,7 @@ func getAnalyticsDataByTitle(ctx *gin.Context, mongoClient *mongo.Client, title 
 	var result bson.D
 	err := coll.FindOne(ctx, bson.D{{"title", title}}).Decode(&result)
 	if err != nil {
-		log.Error().Err(err).Msg("error occured while connecting to redis")
+		log.Error().Err(err).Msg("error occured while connecting to mongo")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get analytics data"})
 		return nil, err
 	}
@@ -45,7 +59,7 @@ func getAllBlogViews(ctx *gin.Context, mongoClient *mongo.Client) ([]bson.M, err
 	}
 	var results []bson.M
 	if err = cursor.All(ctx, &results); err != nil {
-		log.Error().Err(err).Msg("error occured while connecting to redis")
+		log.Error().Err(err).Msg("error occured while connecting to mongo")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get analytics data"})
 		return nil, err
 	}
@@ -53,7 +67,23 @@ func getAllBlogViews(ctx *gin.Context, mongoClient *mongo.Client) ([]bson.M, err
 }
 
 func main() {
-	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
+
+	// open config file
+	file, err := os.Open("../../config.yml")
+	if err != nil {
+		fmt.Println("error opening file:", err)
+	}
+	defer file.Close()
+
+	// read config file
+	var config Config
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(config.Mongo.Uri))
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
@@ -66,7 +96,7 @@ func main() {
 	defer mongoClient.Disconnect(ctx)
 	router := gin.Default()
 
-	router.GET("/views/title", func(ctx *gin.Context) {
+	router.GET("/views/:title", func(ctx *gin.Context) {
 		title := ctx.Param("title")
 		result, err := getAnalyticsDataByTitle(ctx, mongoClient, title)
 		if err != nil {
@@ -86,5 +116,5 @@ func main() {
 			"Data": result,
 		})
 	})
-	router.Run()
+	router.Run(":8081")
 }

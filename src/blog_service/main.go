@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"net/http"
 	"os"
 	"time"
@@ -15,14 +16,24 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var (
-	mongo_host = os.Getenv("MONGO1_HOST")
-	mongo_port = os.Getenv("MONGO1_PORT")
-	redis_host = os.Getenv("REDIS_HOST")
-	redis_port = os.Getenv("REDIS_PORT")
-	mongo_uri  = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
-	redis_uri  = fmt.Sprintf("redis://%s:%s/0", redis_host, redis_port)
-)
+type Config struct {
+	Mongo struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"mongo"`
+	Redis struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"redis"`
+}
 
 const (
 	databaseName   = "blog"
@@ -43,7 +54,25 @@ func getPost(ctx *gin.Context, mongoClient *mongo.Client, title string) (bson.D,
 }
 
 func Publish(ctx *gin.Context, payload string) {
-	opt, err := redis.ParseURL(redis_uri)
+
+	//TODO: move to context?
+
+	// open config file
+	file, err := os.Open("../../config.yml")
+	if err != nil {
+		fmt.Println("error opening file:", err)
+	}
+	defer file.Close()
+
+	// read config file
+	var config Config
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	opt, err := redis.ParseURL(config.Redis.Uri)
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to redis")
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Analytics error"})
@@ -58,7 +87,23 @@ func Publish(ctx *gin.Context, payload string) {
 }
 
 func main() {
-	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
+
+	// open config file
+	file, err := os.Open("../../config.yml")
+	if err != nil {
+		fmt.Println("error opening file:", err)
+	}
+	defer file.Close()
+
+	// read config file
+	var config Config
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(config.Mongo.Uri))
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
@@ -81,5 +126,5 @@ func main() {
 			"Data": result,
 		})
 	})
-	router.Run()
+	router.Run(":8082")
 }

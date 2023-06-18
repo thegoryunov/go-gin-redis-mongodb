@@ -3,14 +3,38 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"gopkg.in/yaml.v2"
+	"os"
 )
+
+type Config struct {
+	Mongo struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"mongo"`
+	Redis struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+		Database string `yaml:"database"`
+		Uri      string `yaml:"uri"`
+	} `yaml:"redis"`
+}
+
+type AnalyticsData struct {
+	Title string
+	Views int
+}
 
 const (
 	databaseName     = "blog"
@@ -18,20 +42,6 @@ const (
 	resultKeyIndex   = 0
 	resultValueIndex = 1
 )
-
-var (
-	mongo_host = os.Getenv("MONGO2_HOST")
-	mongo_port = os.Getenv("MONGO2_PORT")
-	redis_host = os.Getenv("REDIS_HOST")
-	redis_port = os.Getenv("REDIS_PORT")
-	mongo_uri  = fmt.Sprintf("mongodb://%s:%s", mongo_host, mongo_port)
-	redis_uri  = fmt.Sprintf("redis://%s:%s/0", redis_host, redis_port)
-)
-
-type AnalyticsData struct {
-	Title string
-	Views int
-}
 
 func getDoc(mongoClient *mongo.Client, title string) (AnalyticsData, error) {
 	coll := mongoClient.Database(databaseName).Collection(collectionName)
@@ -80,8 +90,24 @@ func updateAnalytics(mongoClient *mongo.Client, title string) {
 }
 
 func main() {
+
+	// open config file
+	file, err := os.Open("../../config.yml")
+	if err != nil {
+		fmt.Println("error opening file:", err)
+	}
+	defer file.Close()
+
+	// read config file
+	var config Config
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
 	ctx := context.Background()
-	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(mongo_uri))
+	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(config.Mongo.Uri))
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
@@ -90,7 +116,7 @@ func main() {
 		log.Error().Err(err).Msg("error occured while connecting to mongo")
 	}
 	defer mongoClient.Disconnect(ctx)
-	opt, err := redis.ParseURL(redis_uri)
+	opt, err := redis.ParseURL(config.Redis.Uri)
 	if err != nil {
 		log.Error().Err(err).Msg("error occured while connecting to redis")
 	}
