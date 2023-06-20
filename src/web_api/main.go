@@ -162,6 +162,7 @@ func main() {
 	err = decoder.Decode(&config)
 	if err != nil {
 		fmt.Println("error:", err)
+		//log.Error().Err(err).Msg("decode response")
 	}
 
 	opt, err := redis.ParseURL(config.Redis.Uri)
