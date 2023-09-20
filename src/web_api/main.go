@@ -7,7 +7,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"net/http"
 	"os"
 )
@@ -210,6 +210,5 @@ func main() {
 	router.GET("/views/:title", getPostViews)
 	router.GET("/views", getAllViews)
 	router.Run(":8080")
-}
 
-//todo test
+}
